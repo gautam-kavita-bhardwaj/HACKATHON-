@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoSPI | Automated Data Preparation, Estimation & Report Writing</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Custom Styles -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        .step-card {
+            background-color: white;
+            border-radius: 0.75rem;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: all 0.3s ease-in-out;
+        }
+        .step-card:hover {
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            transform: translateY(-2px);
+        }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 240px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 10px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -120px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.8rem;
+            font-weight: 400;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #3498db;
+            width: 30px;
+            height: 30px;
+            -webkit-animation: spin 2s linear infinite; /* Safari */
+            animation: spin 2s linear infinite;
+        }
+        @-webkit-keyframes spin {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(360deg); }
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="container mx-auto p-4 md:p-8">
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <img src="https://placehold.co/100x100/e2e8f0/334155?text=MoSPI" alt="MoSPI Logo" class="mx-auto mb-4 h-20 w-20 rounded-full">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">AI-Enhanced Survey Data Processing Tool</h1>
+            <p class="text-gray-600 mt-2 max-w-3xl mx-auto">An automated application for data preparation, estimation, and report writing, designed for the Ministry of Statistics and Programme Implementation.</p>
+        </header>
+
+        <main class="space-y-8">
+            <!-- Step 1: Data Input -->
+            <section id="step1" class="step-card p-6">
+                <div class="flex items-center mb-4">
+                    <div class="bg-blue-500 text-white rounded-full h-8 w-8 flex items-center justify-center font-bold text-lg mr-4">1</div>
+                    <h2 class="text-2xl font-semibold text-gray-700">Data Input & Configuration</h2>
+                </div>
+                <p class="text-gray-600 mb-4">Upload your raw survey file in CSV or Excel format. The system will automatically detect headers.</p>
+                <div class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
+                    <input type="file" id="fileInput" accept=".csv, .xlsx, .xls" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-colors"/>
+                    <button id="resetButton" class="w-full md:w-auto bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-full transition-colors flex items-center justify-center">
+                        <i data-lucide="rotate-cw" class="h-4 w-4 mr-2"></i> Reset
+                    </button>
+                </div>
+                <div id="fileInfo" class="mt-4 text-sm text-gray-700"></div>
+            </section>
+
+            <!-- Step 2: Cleaning Modules -->
+            <section id="step2" class="step-card p-6 hidden">
+                <div class="flex items-center mb-4">
+                    <div class="bg-blue-500 text-white rounded-full h-8 w-8 flex items-center justify-center font-bold text-lg mr-4">2</div>
+                    <h2 class="text-2xl font-semibold text-gray-700">Data Cleaning Modules</h2>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Missing Value Imputation -->
+                    <div class="border p-4 rounded-lg bg-gray-50">
+                        <h3 class="font-semibold text-lg mb-2 flex items-center">
+                            Missing Value Imputation
+                            <span class="tooltip ml-2">
+                                <i data-lucide="help-circle" class="h-4 w-4 text-gray-500"></i>
+                                <span class="tooltiptext">Handle empty or null cells in your data using statistical methods.</span>
+                            </span>
+                        </h3>
+                        <select id="imputationMethod" class="w-full p-2 border rounded-md bg-white">
+                            <option value="none">None</option>
+                            <option value="mean">Mean Imputation</option>
+                            <option value="median">Median Imputation</option>
+                        </select>
+                        <div class="mt-2">
+                            <label for="imputationColumn" class="block text-sm font-medium text-gray-700">Select Column:</label>
+                            <select id="imputationColumn" class="w-full p-2 border rounded-md bg-white"></select>
+                        </div>
+                    </div>
+                    <!-- Outlier Detection -->
+                    <div class="border p-4 rounded-lg bg-gray-50">
+                        <h3 class="font-semibold text-lg mb-2 flex items-center">
+                            Outlier Detection & Treatment
+                             <span class="tooltip ml-2">
+                                <i data-lucide="help-circle" class="h-4 w-4 text-gray-500"></i>
+                                <span class="tooltiptext">Identify and manage extreme values that can skew results.</span>
+                            </span>
+                        </h3>
+                        <select id="outlierMethod" class="w-full p-2 border rounded-md bg-white">
+                            <option value="none">None</option>
+                            <option value="iqr">Remove using IQR</option>
+                            <option value="zscore">Remove using Z-score (threshold=3)</option>
+                            <option value="winsorize">Winsorize (at 5% and 95%)</option>
+                        </select>
+                        <div class="mt-2">
+                            <label for="outlierColumn" class="block text-sm font-medium text-gray-700">Select Column:</label>
+                            <select id="outlierColumn" class="w-full p-2 border rounded-md bg-white"></select>
+                        </div>
+                    </div>
+                    <!-- Rule-Based Validation -->
+                    <div class="border p-4 rounded-lg bg-gray-50">
+                        <h3 class="font-semibold text-lg mb-2 flex items-center">
+                            Rule-Based Validation
+                             <span class="tooltip ml-2">
+                                <i data-lucide="help-circle" class="h-4 w-4 text-gray-500"></i>
+                                <span class="tooltiptext">Use JS syntax (&& for AND, || for OR). E.g., 'Age > 18 && Income > 0'. The system will also try to convert 'AND'/'OR'.</span>
+                            </span>
+                        </h3>
+                        <input type="text" id="ruleInput" placeholder="e.g., Age > 18 && Income > 0" class="w-full p-2 border rounded-md bg-white">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 3: Weight Application -->
+            <section id="step3" class="step-card p-6 hidden">
+                <div class="flex items-center mb-4">
+                    <div class="bg-blue-500 text-white rounded-full h-8 w-8 flex items-center justify-center font-bold text-lg mr-4">3</div>
+                    <h2 class="text-2xl font-semibold text-gray-700">Weight Application & Estimation</h2>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="weightColumn" class="block text-sm font-medium text-gray-700 flex items-center">
+                            Select Weight Column
+                            <span class="tooltip ml-2">
+                                <i data-lucide="help-circle" class="h-4 w-4 text-gray-500"></i>
+                                <span class="tooltiptext">Choose the column containing survey design weights for accurate population estimates.</span>
+                            </span>
+                        </label>
+                        <select id="weightColumn" class="w-full p-2 border rounded-md bg-white"></select>
+                    </div>
+                    <div>
+                        <label for="analysisColumn" class="block text-sm font-medium text-gray-700 flex items-center">
+                            Select Analysis Column
+                            <span class="tooltip ml-2">
+                                <i data-lucide="help-circle" class="h-4 w-4 text-gray-500"></i>
+                                <span class="tooltiptext">Choose the numeric column you want to analyze and estimate population parameters for.</span>
+                            </span>
+                        </label>
+                        <select id="analysisColumn" class="w-full p-2 border rounded-md bg-white"></select>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Process Button -->
+            <div id="processButtonContainer" class="text-center hidden">
+                <button id="processButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full transition-transform transform hover:scale-105 text-lg flex items-center justify-center mx-auto">
+                    <i data-lucide="play-circle" class="h-6 w-6 mr-2"></i>
+                    Process Data & Generate Report
+                </button>
+                <div id="loader" class="loader mx-auto mt-4 hidden"></div>
+            </div>
+
+            <!-- Step 4: Results & Report -->
+            <section id="step4" class="step-card p-6 hidden">
+                <div class="flex items-center mb-4">
+                    <div class="bg-green-500 text-white rounded-full h-8 w-8 flex items-center justify-center font-bold text-lg mr-4">4</div>
+                    <h2 class="text-2xl font-semibold text-gray-700">Results & Report Generation</h2>
+                </div>
+                <div id="resultsContainer" class="space-y-6">
+                    <!-- Results will be dynamically inserted here -->
+                </div>
+            </section>
+        </main>
+        
+        <!-- Modal for Data Preview -->
+        <div id="dataPreviewModal" class="modal-overlay hidden">
+            <div class="modal-content w-full max-w-4xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold">Data Preview</h3>
+                    <button id="closeModalButton" class="text-gray-500 hover:text-gray-800">
+                        <i data-lucide="x" class="h-6 w-6"></i>
+                    </button>
+                </div>
+                <div id="modalTableContainer" class="overflow-x-auto"></div>
+            </div>
+        </div>
+        
+        <!-- Hidden canvas for chart rendering -->
+        <div class="hidden">
+            <canvas id="visualizationChart" width="800" height="400"></canvas>
+        </div>
+
+    </div>
+
+    <script>
+        // --- STATE MANAGEMENT ---
+        let rawData = [];
+        let processedData = [];
+        let headers = [];
+        let numericHeaders = [];
+        let config = {};
+        let workflowLog = [];
+        let chartInstance = null;
+
+        // --- DOM ELEMENTS ---
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const resetButton = document.getElementById('resetButton');
+        const step2 = document.getElementById('step2');
+        const step3 = document.getElementById('step3');
+        const step4 = document.getElementById('step4');
+        const processButtonContainer = document.getElementById('processButtonContainer');
+        const processButton = document.getElementById('processButton');
+        const loader = document.getElementById('loader');
+        const resultsContainer = document.getElementById('resultsContainer');
+        
+        // --- CONFIGURATION ELEMENTS ---
+        const imputationMethod = document.getElementById('imputationMethod');
+        const imputationColumn = document.getElementById('imputationColumn');
+        const outlierMethod = document.getElementById('outlierMethod');
+        const outlierColumn = document.getElementById('outlierColumn');
+        const ruleInput = document.getElementById('ruleInput');
+        const weightColumn = document.getElementById('weightColumn');
+        const analysisColumn = document.getElementById('analysisColumn');
+        
+        // --- MODAL ELEMENTS ---
+        const dataPreviewModal = document.getElementById('dataPreviewModal');
+        const closeModalButton = document.getElementById('closeModalButton');
+        const modalTableContainer = document.getElementById('modalTableContainer');
+
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            lucide.createIcons();
+            fileInput.addEventListener('change', handleFile);
+            resetButton.addEventListener('click', resetApplication);
+            processButton.addEventListener('click', processData);
+            closeModalButton.addEventListener('click', () => dataPreviewModal.classList.add('hidden'));
+        };
+
+        // --- FILE HANDLING ---
+        function handleFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            fileInfo.textContent = `Loading file: ${file.name}...`;
+            const reader = new FileReader();
+
+            if (file.name.endsWith('.csv')) {
+                reader.onload = (e) => {
+                    Papa.parse(e.target.result, {
+                        header: true,
+                        skipEmptyLines: true,
+                        dynamicTyping: true,
+                        complete: (results) => parseComplete(results.data),
+                    });
+                };
+                reader.readAsText(file);
+            } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: null });
+                    parseComplete(jsonData);
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        }
+        
+        function parseComplete(data) {
+            rawData = data;
+            processedData = JSON.parse(JSON.stringify(rawData));
+            headers = Object.keys(rawData[0] || {});
+            numericHeaders = headers.filter(h => rawData.every(row => row[h] === null || typeof row[h] === 'number'));
+
+            if (headers.length === 0) {
+                fileInfo.innerHTML = `<span class="text-red-500">Error: Could not parse file. Check format and content.</span>`;
+                return;
+            }
+
+            fileInfo.innerHTML = `
+                <span class="text-green-600 font-semibold">File loaded successfully!</span><br>
+                Detected ${rawData.length} rows and ${headers.length} columns.
+            `;
+            
+            populateSelectors();
+            showProcessingSteps();
+        }
+
+        function populateSelectors() {
+            const numCols = numericHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
+            imputationColumn.innerHTML = numCols;
+            outlierColumn.innerHTML = numCols;
+            weightColumn.innerHTML = numCols;
+            analysisColumn.innerHTML = numCols;
+        }
+        
+        function showProcessingSteps() {
+            step2.classList.remove('hidden');
+            step3.classList.remove('hidden');
+            processButtonContainer.classList.remove('hidden');
+        }
+
+        // --- CORE PROCESSING LOGIC ---
+        async function processData() {
+            loader.classList.remove('hidden');
+            processButton.disabled = true;
+            step4.classList.add('hidden');
+            resultsContainer.innerHTML = '';
+            workflowLog = [];
+            
+            logStep(`Processing started for file: ${fileInput.files[0].name}`);
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            processedData = JSON.parse(JSON.stringify(rawData));
+            
+            config = {
+                fileName: fileInput.files[0].name,
+                initialRows: rawData.length,
+                imputation: { method: imputationMethod.value, column: imputationColumn.value, imputedCount: 0 },
+                outlier: { method: outlierMethod.value, column: outlierColumn.value, removedCount: 0 },
+                validation: { rule: ruleInput.value, removedCount: 0 },
+                weighting: { weightColumn: weightColumn.value, analysisColumn: analysisColumn.value },
+                finalRows: 0,
+            };
+
+            if (config.imputation.method !== 'none') applyImputation();
+            if (config.outlier.method !== 'none') applyOutlierTreatment();
+            if (config.validation.rule.trim() !== '') applyRuleValidation();
+            
+            config.finalRows = processedData.length;
+            logStep(`Processing finished. Final row count: ${config.finalRows.toLocaleString()}`);
+
+            const estimationResults = performEstimation();
+            
+            displayResults(estimationResults);
+            generateVisualization();
+
+            loader.classList.add('hidden');
+            processButton.disabled = false;
+            step4.classList.remove('hidden');
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }
+        
+        function logStep(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            workflowLog.push({ timestamp, message });
+        }
+
+        // --- CLEANING FUNCTIONS ---
+        function applyImputation() {
+            const { method, column } = config.imputation;
+            logStep(`Starting imputation with method: '${method}' on column '${column}'.`);
+            if (!column) {
+                logStep(`Imputation skipped: No column selected.`);
+                return;
+            }
+
+            const values = processedData.map(row => row[column]).filter(v => v !== null && typeof v === 'number');
+            if (values.length === 0) {
+                logStep(`Imputation skipped: No numeric data in column '${column}'.`);
+                return;
+            }
+
+            let replacement;
+            if (method === 'mean') replacement = values.reduce((a, b) => a + b, 0) / values.length;
+            else if (method === 'median') {
+                const sorted = [...values].sort((a, b) => a - b);
+                const mid = Math.floor(sorted.length / 2);
+                replacement = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+            }
+
+            processedData.forEach(row => {
+                if (row[column] === null || row[column] === undefined) {
+                    row[column] = replacement;
+                    config.imputation.imputedCount++;
+                }
+            });
+            logStep(`Imputation complete. ${config.imputation.imputedCount.toLocaleString()} values were imputed.`);
+        }
+
+        function applyOutlierTreatment() {
+            const { method, column } = config.outlier;
+            logStep(`Starting outlier treatment with method: '${method}' on column '${column}'.`);
+            if (!column) {
+                logStep(`Outlier treatment skipped: No column selected.`);
+                return;
+            }
+            
+            const initialCount = processedData.length;
+            let values = processedData.map(row => row[column]).filter(v => typeof v === 'number');
+            
+            if (method === 'iqr') {
+                const sorted = [...values].sort((a, b) => a - b);
+                const q1 = sorted[Math.floor(sorted.length * 0.25)];
+                const q3 = sorted[Math.floor(sorted.length * 0.75)];
+                const iqr = q3 - q1;
+                const lowerBound = q1 - 1.5 * iqr;
+                const upperBound = q3 + 1.5 * iqr;
+                processedData = processedData.filter(row => row[column] >= lowerBound && row[column] <= upperBound);
+            } else if (method === 'zscore') {
+                const mean = values.reduce((a, b) => a + b, 0) / values.length;
+                const stdDev = Math.sqrt(values.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b, 0) / values.length);
+                processedData = processedData.filter(row => Math.abs((row[column] - mean) / stdDev) <= 3);
+            } else if (method === 'winsorize') {
+                const sorted = [...values].sort((a, b) => a - b);
+                const lowerBound = sorted[Math.floor(sorted.length * 0.05)];
+                const upperBound = sorted[Math.floor(sorted.length * 0.95)];
+                processedData.forEach(row => {
+                    if (row[column] < lowerBound) row[column] = lowerBound;
+                    if (row[column] > upperBound) row[column] = upperBound;
+                });
+            }
+            config.outlier.removedCount = initialCount - processedData.length;
+            logStep(`Outlier treatment complete. ${config.outlier.removedCount.toLocaleString()} rows removed.`);
+        }
+
+        function applyRuleValidation() {
+            const { rule } = config.validation;
+            logStep(`Starting rule-based validation with rule: "${rule}"`);
+            const initialCount = processedData.length;
+            try {
+                const jsRule = rule.replace(/\s+AND\s+/gi, ' && ').replace(/\s+OR\s+/gi, ' || ');
+                const ruleFn = new Function(...headers, `return ${jsRule};`);
+                processedData = processedData.filter(row => {
+                    try {
+                        const args = headers.map(h => row[h]);
+                        return ruleFn(...args);
+                    } catch (e) { return true; }
+                });
+                config.validation.removedCount = initialCount - processedData.length;
+                logStep(`Rule validation complete. ${config.validation.removedCount.toLocaleString()} rows removed.`);
+            } catch (e) {
+                logStep(`Rule validation failed: Invalid syntax.`);
+                showDataPreview([], `Invalid Rule Syntax: ${e.message}. Please check your rule and try again.`);
+            }
+        }
+
+        // --- ESTIMATION FUNCTIONS ---
+        function performEstimation() {
+            logStep(`Starting final estimation for column '${config.weighting.analysisColumn}' using weights from '${config.weighting.weightColumn}'.`);
+            const { weightColumn, analysisColumn } = config.weighting;
+            if (!weightColumn || !analysisColumn || processedData.length === 0) {
+                const errorMsg = "Estimation failed: Weight or Analysis column not selected or no data to process.";
+                logStep(errorMsg);
+                return { error: errorMsg };
+            }
+
+            const data = processedData.map(row => ({ value: row[analysisColumn], weight: row[weightColumn] })).filter(d => typeof d.value === 'number' && typeof d.weight === 'number');
+
+            if (data.length === 0) {
+                const errorMsg = "Estimation failed: No valid numeric data in selected analysis/weight columns.";
+                logStep(errorMsg);
+                return { error: errorMsg };
+            }
+
+            const unweightedSum = data.reduce((acc, d) => acc + d.value, 0);
+            const unweightedMean = unweightedSum / data.length;
+            const unweightedVariance = data.reduce((acc, d) => acc + Math.pow(d.value - unweightedMean, 2), 0) / (data.length - 1);
+            const unweightedStdErr = Math.sqrt(unweightedVariance / data.length);
+            const unweightedMarginOfError = 1.96 * unweightedStdErr;
+
+            const totalWeight = data.reduce((acc, d) => acc + d.weight, 0);
+            const weightedSum = data.reduce((acc, d) => acc + (d.value * d.weight), 0);
+            const weightedMean = weightedSum / totalWeight;
+            const weightedVariance = data.reduce((acc, d) => acc + d.weight * Math.pow(d.value - weightedMean, 2), 0) / totalWeight;
+            const weightedStdErr = Math.sqrt(weightedVariance / data.length);
+            const weightedMarginOfError = 1.96 * weightedStdErr;
+            
+            logStep("Estimation complete.");
+            return {
+                unweighted: { mean: unweightedMean, stdErr: unweightedStdErr, marginOfError: unweightedMarginOfError },
+                weighted: { mean: weightedMean, stdErr: weightedStdErr, marginOfError: weightedMarginOfError, totalWeight: totalWeight },
+                sampleSize: data.length,
+            };
+        }
+
+        // --- UI & REPORTING ---
+        function displayResults(estimationResults) {
+            let content = `
+                <div class="bg-gray-50 p-4 rounded-lg border">
+                    <h3 class="font-semibold text-xl mb-3">Processing Summary & Diagnostics</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <p><strong>File:</strong> ${config.fileName}</p>
+                            <p><strong>Initial Rows:</strong> ${config.initialRows.toLocaleString()}</p>
+                            <p><strong>Final Rows after Cleaning:</strong> ${config.finalRows.toLocaleString()}</p>
+                        </div>
+                        <div>
+                            <p><strong>Imputation (${config.imputation.method}):</strong> ${config.imputation.imputedCount.toLocaleString()} values imputed in '${config.imputation.column}'</p>
+                            <p><strong>Outlier Removal (${config.outlier.method}):</strong> ${config.outlier.removedCount.toLocaleString()} rows removed from '${config.outlier.column}'</p>
+                            <p><strong>Rule Validation:</strong> ${config.validation.removedCount.toLocaleString()} rows removed by rule: "${config.validation.rule || 'N/A'}"</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex space-x-2">
+                        <button id="previewRawBtn" class="bg-white hover:bg-gray-100 text-gray-800 text-sm font-semibold py-2 px-4 border border-gray-300 rounded-lg shadow-sm">Preview Raw Data</button>
+                        <button id="previewProcessedBtn" class="bg-white hover:bg-gray-100 text-gray-800 text-sm font-semibold py-2 px-4 border border-gray-300 rounded-lg shadow-sm">Preview Processed Data</button>
+                    </div>
+                </div>
+            `;
+
+            if (estimationResults.error) {
+                content += `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mt-4" role="alert">
+                                <strong class="font-bold">Estimation Error:</strong>
+                                <span class="block sm:inline">${estimationResults.error}</span>
+                            </div>`;
+            } else {
+                content += `
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-200 mt-6">
+                        <h3 class="font-semibold text-xl mb-3">Final Estimates for '${config.weighting.analysisColumn}'</h3>
+                        <p class="text-sm text-gray-600 mb-4">Based on a final sample size of ${estimationResults.sampleSize.toLocaleString()}.</p>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="bg-white">
+                                    <tr>
+                                        <th class="p-2 border">Statistic</th>
+                                        <th class="p-2 border">Unweighted</th>
+                                        <th class="p-2 border">Weighted (using '${config.weighting.weightColumn}')</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="bg-white"><td class="p-2 border font-medium">Mean</td><td class="p-2 border">${estimationResults.unweighted.mean.toFixed(4)}</td><td class="p-2 border">${estimationResults.weighted.mean.toFixed(4)}</td></tr>
+                                    <tr class="bg-gray-50"><td class="p-2 border font-medium">Standard Error</td><td class="p-2 border">${estimationResults.unweighted.stdErr.toFixed(4)}</td><td class="p-2 border">${estimationResults.weighted.stdErr.toFixed(4)}</td></tr>
+                                    <tr class="bg-white"><td class="p-2 border font-medium">Margin of Error (95% CI)</td><td class="p-2 border">${estimationResults.unweighted.marginOfError.toFixed(4)}</td><td class="p-2 border">${estimationResults.weighted.marginOfError.toFixed(4)}</td></tr>
+                                    <tr class="bg-gray-50"><td class="p-2 border font-medium">Estimated Population Total</td><td class="p-2 border">N/A</td><td class="p-2 border">${(estimationResults.weighted.mean * estimationResults.weighted.totalWeight).toLocaleString(undefined, {maximumFractionDigits: 0})}</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            content += `
+                <div class="bg-gray-50 p-4 rounded-lg border mt-6">
+                    <h3 class="font-semibold text-xl mb-3">Data Distribution Visualization</h3>
+                    <p class="text-sm text-gray-600 mb-4">Comparison of data distribution for '${config.weighting.analysisColumn}' before and after cleaning.</p>
+                    <canvas id="resultsChartCanvas"></canvas>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg border mt-6">
+                    <h3 class="font-semibold text-xl mb-3">Workflow Log</h3>
+                    <div class="overflow-x-auto max-h-48">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-white sticky top-0"><tr><th class="p-2 border">Timestamp</th><th class="p-2 border">Action</th></tr></thead>
+                            <tbody>
+                                ${workflowLog.map(log => `<tr><td class="p-2 border">${log.timestamp}</td><td class="p-2 border">${log.message}</td></tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="text-center mt-8">
+                    <button id="downloadReportBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-full transition-transform transform hover:scale-105 text-lg flex items-center justify-center mx-auto">
+                        <i data-lucide="download" class="h-6 w-6 mr-2"></i>
+                        Download PDF Report
+                    </button>
+                </div>
+            `;
+
+            resultsContainer.innerHTML = content;
+            lucide.createIcons();
+
+            document.getElementById('downloadReportBtn').addEventListener('click', () => generatePDF(config, estimationResults));
+            document.getElementById('previewRawBtn').addEventListener('click', () => showDataPreview(rawData, 'Raw Data'));
+            document.getElementById('previewProcessedBtn').addEventListener('click', () => showDataPreview(processedData, 'Processed Data'));
+        }
+        
+        function generateVisualization() {
+            const analysisCol = config.weighting.analysisColumn;
+            if (!analysisCol) return;
+
+            const rawValues = rawData.map(row => row[analysisCol]).filter(v => typeof v === 'number');
+            const processedValues = processedData.map(row => row[analysisCol]).filter(v => typeof v === 'number');
+
+            if (rawValues.length === 0) return;
+
+            const createHistogramData = (values, numBins = 20) => {
+                const min = Math.min(...values);
+                const max = Math.max(...values);
+                const binSize = (max - min) / numBins;
+                const bins = Array(numBins).fill(0);
+                const labels = Array(numBins).fill(0).map((_, i) => (min + i * binSize).toFixed(1));
+
+                for (const value of values) {
+                    const binIndex = Math.min(Math.floor((value - min) / binSize), numBins - 1);
+                    if (binIndex >= 0) bins[binIndex]++;
+                }
+                return { labels, bins };
+            };
+
+            const rawHist = createHistogramData(rawValues);
+            const processedHist = createHistogramData(processedValues);
+
+            const chartData = {
+                labels: rawHist.labels,
+                datasets: [
+                    { label: 'Raw Data', data: rawHist.bins, backgroundColor: 'rgba(255, 99, 132, 0.5)' },
+                    { label: 'Processed Data', data: processedHist.bins, backgroundColor: 'rgba(54, 162, 235, 0.5)' }
+                ]
+            };
+            
+            // Render chart on visible canvas
+            const ctxVisible = document.getElementById('resultsChartCanvas').getContext('2d');
+            new Chart(ctxVisible, { type: 'bar', data: chartData, options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true } } } });
+
+            // Render chart on hidden canvas for PDF
+            const ctxHidden = document.getElementById('visualizationChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctxHidden, { type: 'bar', data: chartData, options: { responsive: false, animation: { duration: 0 } } });
+        }
+
+        function showDataPreview(data, title) {
+            modalTableContainer.innerHTML = '';
+            document.querySelector('#dataPreviewModal h3').textContent = `${title}`;
+            if (!data || data.length === 0) {
+                modalTableContainer.innerHTML = `<p class="text-red-500 p-4">${title.startsWith('Invalid') ? title : 'No data to display.'}</p>`;
+                dataPreviewModal.classList.remove('hidden');
+                return;
+            }
+            
+            const table = document.createElement('table');
+            table.className = 'w-full text-sm text-left text-gray-500';
+            const thead = document.createElement('thead');
+            thead.className = 'text-xs text-gray-700 uppercase bg-gray-50';
+            const tbody = document.createElement('tbody');
+            
+            const headerRow = document.createElement('tr');
+            Object.keys(data[0]).forEach(key => {
+                const th = document.createElement('th');
+                th.scope = 'col';
+                th.className = 'px-4 py-2';
+                th.textContent = key;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            
+            data.slice(0, 100).forEach(rowData => {
+                const row = document.createElement('tr');
+                row.className = 'bg-white border-b';
+                Object.values(rowData).forEach(value => {
+                    const td = document.createElement('td');
+                    td.className = 'px-4 py-2';
+                    td.textContent = value === null ? 'N/A' : value;
+                    row.appendChild(td);
+                });
+                tbody.appendChild(row);
+            });
+            
+            table.appendChild(thead);
+            table.appendChild(tbody);
+            modalTableContainer.appendChild(table);
+            dataPreviewModal.classList.remove('hidden');
+        }
+
+        function generatePDF(reportConfig, estimationResults) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            let finalY = 0;
+
+            // --- STYLES FOR PDF ---
+            const titleStyle = { fontStyle: 'bold', fontSize: 18 };
+            const subtitleStyle = { fontStyle: 'normal', fontSize: 11, textColor: 100 };
+            const sectionTitleStyle = { fontStyle: 'bold', fontSize: 14, fillColor: [22, 160, 133], textColor: 255 };
+
+            // --- HEADER ---
+            doc.setFontSize(titleStyle.fontSize);
+            doc.setFont(undefined, 'bold');
+            doc.text("Survey Data Processing Report", 14, 22);
+            doc.setFontSize(subtitleStyle.fontSize);
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(subtitleStyle.textColor);
+            doc.text(`Ministry of Statistics and Programme Implementation`, 14, 28);
+            doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 34);
+
+            // --- EXECUTIVE SUMMARY (FIXED) ---
+            doc.autoTable({
+                startY: 40,
+                head: [[{ content: 'Executive Summary', colSpan: 2, styles: { halign: 'center' } }]],
+                body: [
+                    ['File Name', reportConfig.fileName || 'N/A'],
+                    ['Initial Row Count', reportConfig.initialRows ? reportConfig.initialRows.toLocaleString() : '0'],
+                    ['Final Row Count', reportConfig.finalRows ? reportConfig.finalRows.toLocaleString() : '0'],
+                ],
+                theme: 'grid',
+                headStyles: sectionTitleStyle
+            });
+            finalY = doc.lastAutoTable.finalY;
+
+            // --- CLEANING & VALIDATION DIAGNOSTICS (FIXED) ---
+            const imputationMethodText = (reportConfig.imputation.method !== 'none') ? `${reportConfig.imputation.method} on '${reportConfig.imputation.column}'` : 'None';
+            const outlierMethodText = (reportConfig.outlier.method !== 'none') ? `${reportConfig.outlier.method} on '${reportConfig.outlier.column}'` : 'None';
+            doc.autoTable({
+                startY: finalY + 10,
+                head: [[{ content: 'Data Cleaning & Validation Diagnostics', colSpan: 2, styles: { halign: 'center' } }]],
+                body: [
+                    [{ content: 'Missing Value Imputation', colSpan: 2, styles: { fontStyle: 'bold', fillColor: '#f0f0f0' } }],
+                    ['Method Applied', imputationMethodText],
+                    ['Values Imputed', reportConfig.imputation.imputedCount.toLocaleString()],
+                    [{ content: 'Outlier Treatment', colSpan: 2, styles: { fontStyle: 'bold', fillColor: '#f0f0f0' } }],
+                    ['Method Applied', outlierMethodText],
+                    ['Outliers Removed', reportConfig.outlier.removedCount.toLocaleString()],
+                    [{ content: 'Rule-Based Validation', colSpan: 2, styles: { fontStyle: 'bold', fillColor: '#f0f0f0' } }],
+                    ['Validation Rule', reportConfig.validation.rule || 'N/A'],
+                    ['Rows Removed by Rule', reportConfig.validation.removedCount.toLocaleString()],
+                ],
+                theme: 'grid',
+                headStyles: { ...sectionTitleStyle, fillColor: [41, 128, 185] }
+            });
+            finalY = doc.lastAutoTable.finalY;
+
+
+            // --- STATISTICAL ESTIMATES (FIXED) ---
+            if (!estimationResults.error) {
+                 doc.autoTable({
+                    startY: finalY + 10,
+                    head: [[{ content: `Statistical Estimates for '${reportConfig.weighting.analysisColumn}'`, colSpan: 2, styles: { halign: 'center' } }]],
+                    body: [
+                        ['Analysis Column', reportConfig.weighting.analysisColumn],
+                        ['Weight Column', reportConfig.weighting.weightColumn],
+                        ['Final Sample Size for Estimation', estimationResults.sampleSize.toLocaleString()],
+                    ],
+                    theme: 'grid',
+                    headStyles: { ...sectionTitleStyle, fillColor: [243, 156, 18] }
+                });
+                
+                doc.autoTable({
+                    startY: doc.lastAutoTable.finalY + 2,
+                    head: [['Statistic', 'Unweighted Value', 'Weighted Value']],
+                    body: [
+                        ['Mean', estimationResults.unweighted.mean.toFixed(4), estimationResults.weighted.mean.toFixed(4)],
+                        ['Standard Error', estimationResults.unweighted.stdErr.toFixed(4), estimationResults.weighted.stdErr.toFixed(4)],
+                        ['Margin of Error (95% CI)', `± ${estimationResults.unweighted.marginOfError.toFixed(4)}`, `± ${estimationResults.weighted.marginOfError.toFixed(4)}`],
+                    ],
+                    theme: 'grid'
+                });
+                finalY = doc.lastAutoTable.finalY;
+            }
+
+            // --- VISUALIZATION & LOGS ON NEW PAGE ---
+            doc.addPage();
+            doc.setFontSize(16);
+            doc.setFont(undefined, 'bold');
+            doc.text("Data Distribution Visualization", 14, 22);
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Comparison of data distribution for '${reportConfig.weighting.analysisColumn}' before and after cleaning.`, 14, 28)
+            const canvas = document.getElementById('visualizationChart');
+            const chartImage = canvas.toDataURL('image/png');
+            doc.addImage(chartImage, 'PNG', 14, 35, 180, 90);
+            finalY = 35 + 90;
+
+            doc.setFontSize(16);
+            doc.setFont(undefined, 'bold');
+            doc.text("Workflow Log", 14, finalY + 15);
+            doc.autoTable({
+                startY: finalY + 20,
+                head: [['Timestamp', 'Action']],
+                body: workflowLog.map(log => [log.timestamp, log.message]),
+                theme: 'striped',
+                headStyles: { ...sectionTitleStyle, fillColor: [127, 140, 141] }
+            });
+
+            doc.save(`MoSPI_Report_${reportConfig.fileName.split('.')[0]}.pdf`);
+        }
+
+        // --- UTILITY ---
+        function resetApplication() {
+            rawData = [];
+            processedData = [];
+            headers = [];
+            numericHeaders = [];
+            config = {};
+            workflowLog = [];
+            if (chartInstance) chartInstance.destroy();
+
+            fileInput.value = '';
+            fileInfo.textContent = '';
+            step2.classList.add('hidden');
+            step3.classList.add('hidden');
+            step4.classList.add('hidden');
+            processButtonContainer.classList.add('hidden');
+            resultsContainer.innerHTML = '';
+            
+            imputationMethod.value = 'none';
+            outlierMethod.value = 'none';
+            ruleInput.value = '';
+            
+            const selectors = [imputationColumn, outlierColumn, weightColumn, analysisColumn];
+            selectors.forEach(sel => sel.innerHTML = '');
+        }
+
+    </script>
+</body>
+</html>
